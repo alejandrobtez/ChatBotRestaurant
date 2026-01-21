@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedidos Restaurante</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+
+    <div class="main-container">
+        <div class="chat-header">
+            <div class="logo-area">
+                <span class="material-icons">restaurant_menu</span>
+                <div class="header-text">
+                    <h2>Restaurante Delivery</h2>
+                    <p>Pedidos Online</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="messages" class="chat-box">
+            <div class="message bot">
+                <p>¡Hola! 👨‍🍳 Soy tu asistente virtual. Puedo gestionar tus pedidos a domicilio, cancelaciones y consultas. ¿Qué te apetece hoy?</p>
+                <span class="time">Ahora</span>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="Escribe tu pedido aquí..." autocomplete="off">
+            <button id="send-btn" onclick="sendMessage()">
+                <span class="material-icons">send</span>
+            </button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
