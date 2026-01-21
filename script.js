@@ -27,30 +27,28 @@ async function sendMessage() {
     inputField.value = "";
     inputField.focus();
 
-    // 2. Mostrar "Escribiendo..." (opcional visual)
-    // En un proyecto real aquí pondríamos un spinner
-
     try {
-        // 3. Llamada a Azure CLU
+        // 2. Llamada a Azure CLU
         const data = await callAzureCLU(text);
         
-        // 4. Procesar respuesta
+        // 3. Procesar respuesta
         const intent = data.result.prediction.topIntent;
         const entities = data.result.prediction.entities;
 
-        console.log("Intent:", intent); // Debug en consola
-        console.log("Entities:", entities); // Debug en consola
+        // DEBUG: Muestra en la consola (F12) qué está recibiendo exactamente
+        console.log("Intención:", intent);
+        console.log("Entidades:", entities);
 
-        // 5. Generar respuesta del Bot
+        // 4. Generar respuesta del Bot
         generateBotReply(intent, entities);
 
     } catch (error) {
         console.error(error);
-        addMessage("⚠️ Error de conexión. Revisa tu consola (F12) para ver si es la Clave o el CORS.", "bot");
+        addMessage("⚠️ Error: Revisa la consola (F12). Probablemente sea la Key o el Endpoint.", "bot");
     }
 }
 
-// Función para conectar con la API
+// Función para conectar con la API de Azure
 async function callAzureCLU(text) {
     const url = `${AZURE_ENDPOINT}language/:analyze-conversations?api-version=2022-10-01-preview`;
     
@@ -79,46 +77,55 @@ async function callAzureCLU(text) {
         body: JSON.stringify(payload)
     });
 
-    if (!response.ok) throw new Error("Fallo en la petición a Azure");
+    if (!response.ok) throw new Error("Fallo en la petición a Azure: " + response.statusText);
     return await response.json();
 }
 
-// Función: Cerebro del Bot (Reglas de Negocio)
+// ==========================================
+// CEREBRO DEL BOT (AQUÍ ESTÁ LA CORRECCIÓN)
+// ==========================================
 function generateBotReply(intent, entities) {
     let reply = "";
 
-    // Extraer datos útiles
-    // Unimos todos los platos en un solo string
-    const platosList = entities.filter(e => e.category === "Plato").map(e => e.text).join(", ");
+    // EXTRAER DATOS (Ajustado a minúsculas)
+    // 1. Buscamos 'plato' en minúscula
+    const platosList = entities.filter(e => e.category === "plato").map(e => e.text).join(", ");
+    
+    // 2. Buscamos 'direccionenvio' en minúscula (según tu indicación)
+    // NOTA: Si en Azure lo llamaste 'DireccionEnvio', cambia esto a "DireccionEnvio"
+    const direccion = entities.find(e => e.category === "direccionenvio" || e.category === "DireccionEnvio"); 
+    
+    // 3. Buscamos 'datetimeV2' (Estándar de Azure)
     const fecha = entities.find(e => e.category === "datetimeV2");
-    const direccion = entities.find(e => e.category === "DireccionEnvio"); // Ahora incluye ciudad
+
 
     switch (intent) {
         case "RealizarPedido":
+            // Si NO ha detectado platos, preguntamos qué quiere
             if (!platosList) {
                 reply = "👨‍🍳 ¿Qué te gustaría pedir? Tenemos Pizzas, Hamburguesas y Ensaladas.";
             } else {
+                // Si SÍ hay platos, miramos si falta la fecha o la dirección
                 if (fecha) {
-                    // Simulación validación 48h
+                    // Validación simple de 48h (Simulada)
                     if (checkDateRule(fecha, 48)) {
-                        const destino = direccion ? `a <b>${direccion.text}</b>` : "pero necesito la dirección completa";
-                        reply = `✅ ¡Oído! Pedido de <b>${platosList}</b> anotado para el ${fecha.text} ${destino}.`;
+                        const destino = direccion ? `a <b>${direccion.text}</b>` : "pero necesito que me digas la dirección de entrega";
+                        reply = `✅ ¡Oído cocina! Pedido de <b>${platosList}</b> anotado para el ${fecha.text} ${destino}.`;
                     } else {
                         reply = "⏳ Lo siento, no aceptamos pedidos con más de 48 horas de antelación.";
                     }
                 } else {
-                    reply = `📝 Tomo nota de: <b>${platosList}</b>. ¿Para cuándo y dónde lo quieres?`;
+                    reply = `📝 Tomo nota de: <b>${platosList}</b>. ¿Para qué día y hora deseas recibirlo? (Máximo 48h).`;
                 }
             }
             break;
 
         case "CancelarPedido":
             if (fecha) {
-                // Simulación validación 24h
-                if (checkDateRule(fecha, 24)) {
+                if (checkDateRule(fecha, 24)) { // Validación cancelación 24h
                      reply = "❌ No es posible cancelar. Debes avisar con al menos 24 horas de antelación.";
                 } else {
-                     reply = `🗑️ Pedido para el ${fecha.text} cancelado correctamente.`;
+                     reply = `🗑️ Correcto. Procedemos a cancelar tu pedido previsto para: ${fecha.text}.`;
                 }
             } else {
                 reply = "Para cancelar necesito saber la fecha del pedido.";
@@ -126,23 +133,27 @@ function generateBotReply(intent, entities) {
             break;
 
         case "ConsultarEstado":
-            reply = "🛵 Tu pedido está en cocina. ¡Saldrá en breve hacia tu dirección!";
+            reply = "🛵 Tu pedido se está cocinando y el repartidor saldrá en breve.";
             break;
 
         case "PedirRecomendacion":
-            reply = "⭐ Hoy te recomiendo nuestra **Hamburguesa Especial** con salsa secreta.";
+            reply = "⭐ Hoy el chef recomienda nuestra **Hamburguesa Especial** con extra de queso.";
             break;
         
         case "ProporcionarDatos":
             if (direccion) {
-                reply = `📍 Dirección guardada: ${direccion.text}. ¿Necesitas algo más?`;
+                reply = `📍 Dirección actualizada: ${direccion.text}. ¿Necesitas algo más?`;
             } else {
-                reply = "Datos recibidos. Gracias.";
+                reply = "Datos recibidos correctamente.";
             }
             break;
 
-        default: // Incluye 'None' y cualquier otro no controlado
-            reply = "🤔 Disculpa, solo gestiono pedidos de comida. ¿Quieres ver la carta?";
+        case "Saludar":
+             reply = "¡Hola! 👋 ¿Tienes hambre? Pídeme lo que quieras.";
+             break;
+
+        default: // 'None' u otros
+            reply = "🤔 Disculpa, no te he entendido bien. Solo gestiono pedidos de comida.";
             break;
     }
 
@@ -154,35 +165,33 @@ function addMessage(text, sender) {
     const msgDiv = document.createElement("div");
     msgDiv.classList.add("message", sender);
     
-    // Hora actual
+    // Hora actual bonita
     const now = new Date();
     const timeString = now.getHours() + ":" + (now.getMinutes()<10?'0':'') + now.getMinutes();
 
     msgDiv.innerHTML = `<p>${text}</p><span class="time">${timeString}</span>`;
     
     chatBox.appendChild(msgDiv);
-    chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll abajo
+    chatBox.scrollTop = chatBox.scrollHeight;
 }
 
 // Utilidad simulada para validar fechas
-// (En producción real usaríamos librerías como Moment.js)
 function checkDateRule(dateEntity, hoursLimit) {
     // Si la frase contiene palabras que implican futuro cercano, damos OK
-    // Si contiene "semana que viene" o cosas lejanas, damos false para probar
     const text = dateEntity.text.toLowerCase();
     
     if (hoursLimit === 48) {
-        // Regla: No más de 48h (Simulación)
-        // Si dice "en 5 días", devuelve falso
+        // Regla: No más de 48h
+        // Si dice "en 5 días" o "semana que viene", devuelve falso (error)
         if (text.includes("días") || text.includes("semana")) return false; 
         return true; 
     }
     
     if (hoursLimit === 24) {
-        // Regla: Cancelar con 24h (Simulación)
-        // Si es "hoy" o "ahora", es menos de 24h -> error
-        if (text.includes("hoy") || text.includes("ahora") || text.includes("ya")) return true; // true = error (menos de 24h)
-        return false; // false = OK (hay tiempo suficiente)
+        // Regla: Cancelar con 24h
+        // Si dice "hoy", "ahora" o "ya", es menos de 24h -> devuelve true (error)
+        if (text.includes("hoy") || text.includes("ahora") || text.includes("ya")) return true; 
+        return false; // OK, hay tiempo
     }
     return true;
 }
