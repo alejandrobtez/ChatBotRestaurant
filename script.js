@@ -91,7 +91,7 @@ function generateBotReply(intent, entities) {
     if (nuevaFecha) pedidoActual.fecha = nuevaFecha.text;
 
     // 3. Dirección (Busca 'direccionenvio')
-    const nuevaDireccion = entities.find(e => e.category.toLowerCase() === "direccionenvio");
+    const nuevaDireccion = entities.find(e => e.category.toLowerCase() === "direccionEnvio");
     if (nuevaDireccion) pedidoActual.direccion = nuevaDireccion.text;
 
     // 4. Nombre (Busca 'personname' o 'nombre')
@@ -200,3 +200,4 @@ function addMessage(text, sender) {
     chatBox.appendChild(msgDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
 }
+
