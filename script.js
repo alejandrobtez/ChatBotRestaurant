@@ -7,9 +7,8 @@ const PROJECT_NAME = "restaurant";
 const DEPLOYMENT_NAME = "restaurantV1"; 
 
 // ==========================================
-// 2. MEMORIA DEL BOT (ESTADO)
+// 2. MEMORIA
 // ==========================================
-// Esta variable sobrevive a las interrupciones
 let pedidoActual = {
     platos: [],
     fecha: null,
@@ -19,7 +18,7 @@ let pedidoActual = {
 };
 
 // ==========================================
-// 3. INTERFAZ Y EVENTOS
+// 3. EVENTOS Y CONEXIÓN
 // ==========================================
 const inputField = document.getElementById("user-input");
 const chatBox = document.getElementById("messages");
@@ -41,14 +40,16 @@ async function sendMessage() {
         const intent = data.result.prediction.topIntent;
         const entities = data.result.prediction.entities;
 
+        // DEBUG: Chivato en la consola para ver qué llega
+        console.log("--- NUEVA RESPUESTA AZURE ---");
         console.log("Intención:", intent);
-        console.log("Entidades detectadas:", entities);
+        console.log("Entidades Brutas:", entities);
 
         generateBotReply(intent, entities);
 
     } catch (error) {
         console.error(error);
-        addMessage("⚠️ Error de conexión. Revisa consola (F12).", "bot");
+        addMessage("⚠️ Error de conexión. Pulsa F12 para ver el detalle.", "bot");
     }
 }
 
@@ -71,115 +72,112 @@ async function callAzureCLU(text) {
 }
 
 // ==========================================
-// 4. CEREBRO DEL BOT (LÓGICA DE INTERRUPCIONES)
+// 4. LÓGICA DE NEGOCIO (EL CEREBRO)
 // ==========================================
 function generateBotReply(intent, entities) {
     let reply = "";
 
-    // --- FASE 1: ABSORCIÓN DE DATOS (Siempre activa) ---
-    // El bot "escucha" datos útiles incluso si el usuario está preguntando otra cosa.
+    // --- FASE 1: EXTRACCIÓN DE DATOS "A PRUEBA DE BALAS" ---
     
-    // 1. Comida (Busca 'plato')
-    const nuevosPlatos = entities.filter(e => e.category.toLowerCase() === "plato").map(e => e.text);
-    if (nuevosPlatos.length > 0) pedidoActual.platos = pedidoActual.platos.concat(nuevosPlatos);
+    // Recorremos TODAS las entidades una a una para no fallar
+    entities.forEach(entidad => {
+        const categoria = entidad.category.toLowerCase(); // Convertimos a minúscula para comparar
+        const texto = entidad.text;
 
-    // 2. Fecha (Busca 'datetimev2' o 'datetime')
-    const nuevaFecha = entities.find(e => {
-        const cat = e.category.toLowerCase();
-        return cat === "datetimev2" || cat === "datetime";
+        // 1. COMIDA
+        if (categoria === 'plato') {
+            pedidoActual.platos.push(texto);
+            console.log(">>> HE ENCONTRADO PLATO:", texto);
+        }
+
+        // 2. FECHA (Cualquier cosa que parezca fecha)
+        if (categoria.includes('time') || categoria.includes('date') || categoria === 'datetimev2') {
+            pedidoActual.fecha = texto;
+            console.log(">>> HE ENCONTRADO FECHA:", texto);
+        }
+
+        // 3. DIRECCIÓN (El arreglo definitivo)
+        // Si la categoría contiene la palabra "direccion", la aceptamos.
+        // Esto cubre: 'DireccionEnvio', 'direccion', 'direccionEntrega', etc.
+        if (categoria.includes('direccion')) {
+            pedidoActual.direccion = texto;
+            console.log(">>> HE ENCONTRADO DIRECCIÓN:", texto);
+        }
+
+        // 4. NOMBRE
+        if (categoria.includes('person') || categoria === 'nombre' || categoria === 'personname') {
+            pedidoActual.nombre = texto;
+            console.log(">>> HE ENCONTRADO NOMBRE:", texto);
+        }
+
+        // 5. EMAIL
+        if (categoria === 'email') {
+            pedidoActual.email = texto;
+            console.log(">>> HE ENCONTRADO EMAIL:", texto);
+        }
     });
-    if (nuevaFecha) pedidoActual.fecha = nuevaFecha.text;
-
-    // 3. Dirección (Busca 'direccionenvio')
-    const nuevaDireccion = entities.find(e => e.category.toLowerCase() === "direccionEnvio");
-    if (nuevaDireccion) pedidoActual.direccion = nuevaDireccion.text;
-
-    // 4. Nombre (Busca 'personname' o 'nombre')
-    const nuevoNombre = entities.find(e => {
-        const cat = e.category.toLowerCase();
-        return cat === "personname" || cat === "nombre";
-    });
-    if (nuevoNombre) pedidoActual.nombre = nuevoNombre.text;
-
-    // 5. Email (Busca 'email')
-    const nuevoEmail = entities.find(e => e.category.toLowerCase() === "email");
-    if (nuevoEmail) pedidoActual.email = nuevoEmail.text;
 
 
-    // --- FASE 2: GESTIÓN DE INTENCIONES E INTERRUPCIONES ---
+    // --- FASE 2: RESPUESTAS ---
 
     switch (intent) {
-        // --- CASOS DE ACCIÓN DIRECTA (Interrupciones permitidas) ---
         case "CancelarPedido":
             resetPedido();
-            reply = "🗑️ Entendido. He cancelado el pedido en curso y borrado todos los datos. ¿En qué más puedo ayudarte?";
+            reply = "🗑️ Pedido cancelado y datos borrados. Dime qué quieres pedir ahora.";
             break;
 
         case "ConsultarEstado":
-            reply = "🛵 Tu pedido actual está en cocina. ¡Saldrá muy pronto!";
-            // Si hay un pedido a medias, le recordamos suavemente
-            if (pedidoActual.platos.length > 0) {
-                reply += "<br><br>⚠️ Nota: Veo que estás intentando hacer un nuevo pedido ahora mismo. Dime los datos que faltan cuando quieras continuar.";
-            }
-            break;
-
-        case "PedirRecomendacion":
-            reply = "⭐ Si te gustan los sabores fuertes, prueba nuestra **Pizza Barbacoa**. Si prefieres algo ligero, la **Ensalada César** es genial.";
-             // El bot responde a la duda, pero mantiene la memoria intacta para cuando el usuario quiera seguir.
+            reply = "🛵 Tu pedido está en curso.";
             break;
 
         case "Saludar":
-            // Si saluda pero ya tenemos datos, asumimos que retoma la conversación
             if (pedidoActual.platos.length > 0) {
-                reply = `¡Hola de nuevo! 👋 Veo que teníamos un pedido a medias de **${pedidoActual.platos.join(", ")}**. ¿Continuamos?`;
+                reply = `Hola de nuevo. Seguimos con tu pedido de **${pedidoActual.platos.join(", ")}**. Dime lo que falta.`;
             } else {
-                reply = "¡Hola! 👋 Soy tu asistente de pedidos. ¿Qué te apetece comer hoy?";
+                reply = "Hola. Soy el asistente de pedidos. Dime qué quieres comer.";
             }
             break;
 
-        // --- CASO PRINCIPAL: FLUJO DE PEDIDO ---
-        // Aquí entramos si la intención es pedir, dar datos, o si el bot no entendió (None) pero hay un pedido activo.
+        // "PedirRecomendacion": Eliminamos ofertas, vamos al grano.
+        case "PedirRecomendacion":
+            reply = "Nuestra especialidad es la Pizza 4 Quesos y la Hamburguesa Completa. ¿Te anoto alguna?";
+            break;
+
+        // FLUJO PRINCIPAL (RealizarPedido, ProporcionarDatos y Default)
         case "RealizarPedido":
         case "ProporcionarDatos":
         default: 
-            // Verificamos el ESTADO del pedido actual
+            // Comprobamos qué falta en orden estricto
             
-            // 1. ¿No hay nada pedido?
             if (pedidoActual.platos.length === 0) {
-                if (intent === "None") {
-                    reply = "🤔 No te he entendido bien. ¿Quieres ver la carta o hacer un pedido?";
-                } else {
-                    reply = "👨‍🍳 ¿Qué te gustaría pedir? (Ej: Una pizza, dos hamburguesas...)";
-                }
+                // Aquí quitamos lo de "ver la carta"
+                reply = "No tengo ningún plato anotado. ¿Qué quieres pedir? (Ej: Una pizza)";
             } 
-            // 2. Hay comida, ¿falta FECHA?
             else if (!pedidoActual.fecha) {
                 reply = `📝 Tengo anotado: <b>${pedidoActual.platos.join(", ")}</b>. ¿Para qué fecha y hora lo quieres?`;
             }
-            // 3. Hay fecha, ¿falta DIRECCIÓN?
             else if (!pedidoActual.direccion) {
-                reply = `✅ Entendido, para el ${pedidoActual.fecha}. ¿A qué **dirección** te lo enviamos?`;
+                reply = `✅ Fecha: ${pedidoActual.fecha}. Necesito la **dirección de entrega**.`;
             }
-            // 4. Hay dirección, ¿falta NOMBRE?
             else if (!pedidoActual.nombre) {
-                reply = `📍 Dirección guardada: ${pedidoActual.direccion}. ¿A **nombre** de quién pongo el pedido?`;
+                // Si llegamos aquí, ES IMPOSIBLE que no tenga dirección, porque la validamos arriba.
+                reply = `📍 Entrega en: <b>${pedidoActual.direccion}</b>. ¿A **nombre** de quién?`;
             }
-            // 5. Hay nombre, ¿falta EMAIL?
             else if (!pedidoActual.email) {
-                reply = `Perfecto ${pedidoActual.nombre}. Solo me falta tu **email** para enviarte la confirmación.`;
+                reply = `Oído, ${pedidoActual.nombre}. Solo falta tu **email** de contacto.`;
             }
-            // 6. ¡TODO COMPLETO!
             else {
+                // RESUMEN FINAL
                 reply = `
-                    🎉 <b>¡PEDIDO CONFIRMADO!</b><br><br>
-                    🥗 <b>Comida:</b> ${pedidoActual.platos.join(", ")}<br>
+                    🎉 <b>PEDIDO TRAMITADO</b><br><br>
+                    🍕 <b>Pedido:</b> ${pedidoActual.platos.join(", ")}<br>
                     📅 <b>Fecha:</b> ${pedidoActual.fecha}<br>
                     📍 <b>Dirección:</b> ${pedidoActual.direccion}<br>
                     👤 <b>Cliente:</b> ${pedidoActual.nombre}<br>
                     📧 <b>Email:</b> ${pedidoActual.email}<br><br>
-                    Gracias por tu pedido. ¿Deseas pedir algo más?
+                    ¿Quieres hacer otro pedido?
                 `;
-                resetPedido(); // Limpiamos la memoria tras el éxito
+                resetPedido();
             }
             break;
     }
@@ -194,9 +192,7 @@ function resetPedido() {
 function addMessage(text, sender) {
     const msgDiv = document.createElement("div");
     msgDiv.classList.add("message", sender);
-    const now = new Date();
-    const time = now.getHours() + ":" + (now.getMinutes()<10?'0':'') + now.getMinutes();
-    msgDiv.innerHTML = `<p>${text}</p><span class="time">${time}</span>`;
+    msgDiv.innerHTML = `<p>${text}</p>`;
     chatBox.appendChild(msgDiv);
     chatBox.scrollTop = chatBox.scrollHeight;
 }
