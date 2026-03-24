@@ -49,3 +49,7 @@ Try to trick the bot or test its limits with these phrases:
 ---
 
 *Project developed by Alejandro Benítez.*
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
