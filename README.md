@@ -48,4 +48,4 @@ Try to trick the bot or test its limits with these phrases:
 
 ---
 
-Project developed by **Alejandro Benítez**.
+*Project developed by Alejandro Benítez.*
